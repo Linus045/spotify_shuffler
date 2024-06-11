@@ -10,6 +10,9 @@ dotenv = "0.15.0"
 futures = "0.3.30"
 futures-core = "0.3.30"
 futures-util = "0.3.30"
+itertools = "0.13.0"
 maybe-async = "0.2.10"
+rand = "0.8.5"
 rspotify = { version = "0.13.2", default-features = false, features = ["client-reqwest", "reqwest-native-tls"] }
+rspotify-model = "0.13.2"
 tokio = {version = "1.38.0", features = ["full"]}
