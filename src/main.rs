@@ -1,17 +1,21 @@
 use itertools::Itertools;
 use rspotify::{prelude::*, scopes, Token};
 use rspotify_model::PlaylistId;
-use std::collections::HashSet;
+use std::{collections::HashSet, env::VarError};
 
 use rand::{seq::SliceRandom, thread_rng};
 
 use futures::StreamExt;
 
+fn load_environment_variables() {
+    dotenvy::dotenv().ok();
+}
+
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().ok();
+    load_environment_variables();
 
-    let scopes = scopes!(
+    let spotify_api_scope = scopes!(
         "user-library-read",
         "playlist-read-private",
         "playlist-modify-public",
@@ -20,12 +24,19 @@ async fn main() {
         "user-read-currently-playing"
     );
 
-    let oauth = get_oauth_settings(scopes).expect("Error: Failed to generate oauth settings");
-    let creds =
-        generate_spotify_credentials().expect("Error: Failed to generate spotify credentials");
+    let creds = match generate_spotify_credentials() {
+        Ok(c) => c,
+        Err(e) => panic!("Error: Failed to read environment variable!\n{}", e),
+    };
+
+    let oauth = match get_oauth_settings(spotify_api_scope) {
+        Some(settings) => settings,
+        None => panic!("Error: Failed to generate oauth settings"),
+    };
 
     let config = rspotify::Config {
         token_cached: true,
+        token_refreshing: true,
         ..Default::default()
     };
 
@@ -46,40 +57,11 @@ async fn main() {
             .expect("Error: Could not refresh access token");
     }
 
-    // let mut stream = spotify_client.current_user_saved_tracks(None);
-    // let mut c = 1;
-    // while let Some(item) = stream.next().await {
-    //     match item {
-    //         Ok(item) => {
-    //             println!("{:04}. {}", c, item.track.name);
-    //             c += 1;
-    //         }
-    //         Err(e) => {
-    //             eprintln!("Error reading track, are you sure the scope and permissions are correct?\n{:?}", e);
-    //         }
-    //     }
-    // }
-
     let _user_id = spotify_client.current_user().await;
 
     //"Playlist - Liked Songs"
     let selected_playlist = "spotify:playlist:7JrIBLVJEfpADiic1MKZy5";
 
-    // let mut playlists;
-    // match user_id {
-    //     Ok(user_id) => {
-    //         playlists = spotify_client.user_playlists(user_id.id);
-    //         while let Some(playlist) = &playlists.next().await {
-    //             match playlist {
-    //                 Ok(playlist) => println!("# {} - {}", playlist.id, playlist.name),
-    //                 Err(err) => eprintln!("Error reading playlist\n{}", err),
-    //             };
-    //         }
-    //     }
-    //     Err(err) => {
-    //         eprintln!("Error: Failed to get user's playlists\n{}", err);
-    //     }
-    // }
     let selected_playlist = PlaylistId::from_uri(selected_playlist).unwrap();
 
     // let songs_in_playlist = spotify_client.playlist_items(selected_playlist.clone(), None, None);
@@ -90,13 +72,6 @@ async fn main() {
             songs.push(song.to_owned());
         }
     }
-
-    // let mut songs: Vec<_> = songs_in_playlist
-    //     .collect::<Vec<_>>()
-    //     .await
-    //     .into_iter()
-    //     .filter_map(|f| f.ok())
-    //     .collect();
 
     println!(
         "Found {} songs in playlist {}",
@@ -221,26 +196,11 @@ fn get_oauth_settings(scope: HashSet<String>) -> Option<rspotify::OAuth> {
     rspotify::OAuth::from_env(scope)
 }
 
-fn generate_spotify_credentials() -> Option<rspotify::Credentials> {
-    let spotify_client_id = match std::env::var("SPOTIFY_CLIENT_ID") {
-        Ok(client_id) => client_id,
-        Err(_) => {
-            eprintln!("Failed to retrieve environment variable SPOTIFY_CLIENT_ID.");
-            return None;
-        }
-    };
-
-    let spotify_client_secret = match std::env::var("SPOTIFY_CLIENT_SECRET") {
-        Ok(client_id) => client_id,
-        Err(_) => {
-            eprintln!("Failed to retrieve environment variable SPOTIFY_CLIENT_SECRET.");
-            return None;
-        }
-    };
-
-    let creds = rspotify::Credentials {
+fn generate_spotify_credentials() -> Result<rspotify::Credentials, VarError> {
+    let spotify_client_id = std::env::var("SPOTIFY_CLIENT_ID")?;
+    let spotify_client_secret = std::env::var("SPOTIFY_CLIENT_SECRET")?;
+    Ok(rspotify::Credentials {
         id: spotify_client_id,
         secret: Some(spotify_client_secret),
-    };
-    Some(creds)
+    })
 }
